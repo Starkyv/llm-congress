@@ -1,0 +1,9 @@
+{
+    "include": ["backend"],
+    "extraPaths": ["backend"],
+    "venvPath": "/Users/mothil/llm/llm-congress",
+    "venv": "venv",
+    "pythonVersion": "3.12"
+}
+
+

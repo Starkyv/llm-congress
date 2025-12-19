@@ -1,0 +1,1041 @@
+CHECKPOINT 2: Dynamic Agent Creation from Config
+Goal
+Create a configuration-driven system that dynamically creates agents based on a JSON config file, allowing any number of agents with custom personalities.
+Tasks
+2.1 Create Agent Configuration Schema
+Create backend/config/agent_config.json:
+What to implement:
+json{
+  "debate_config": {
+    "model": "claude-sonnet-4-20250514",
+    "temperature": 0.7,
+    "streaming": true,
+    "max_tokens": 1000
+  },
+  "proposition_agents": [
+    {
+      "id": "prop_analytical",
+      "name": "Analytical Debater",
+      "personality_type": "analytical",
+      "behavior": "You are a data-driven debater who emphasizes logical reasoning, statistics, and evidence-based arguments. Always cite sources when possible, use quantitative analysis, and structure arguments with clear premises and conclusions. Avoid emotional appeals and focus on empirical evidence.",
+      "temperature": 0.6
+    },
+    {
+      "id": "prop_emotional",
+      "name": "Emotional Advocate",
+      "personality_type": "emotional",
+      "behavior": "You are a passionate debater who appeals to values, emotions, and human impact. Use compelling stories, personal anecdotes, and moral arguments. Focus on the human consequences of policies and decisions. Make your audience feel the importance of the issue.",
+      "temperature": 0.8
+    },
+    {
+      "id": "prop_rhetorical",
+      "name": "Rhetorical Master",
+      "personality_type": "rhetorical",
+      "behavior": "You are an eloquent debater who uses persuasive language techniques. Employ metaphors, analogies, rhetorical questions, and powerful imagery. Your strength is in how you say things, not just what you say. Be memorable and quotable.",
+      "temperature": 0.8
+    },
+    {
+      "id": "prop_factual",
+      "name": "Historical Scholar",
+      "personality_type": "factual",
+      "behavior": "You are a debater who relies on historical precedents, documented cases, and real-world examples. Reference past events, case studies, and concrete instances to support your arguments. Show patterns from history and learn from documented successes and failures.",
+      "temperature": 0.7
+    },
+    {
+      "id": "prop_aggressive",
+      "name": "Aggressive Challenger",
+      "personality_type": "aggressive",
+      "behavior": "You are an assertive, confrontational debater who directly challenges opposing arguments. Press hard on weaknesses, use forceful language, and dominate the conversation. Don't be afraid to interrupt the flow with sharp rebuttals. Be bold and unapologetic.",
+      "temperature": 0.9
+    }
+  ],
+  "opposition_agent": {
+    "id": "opp_pragmatist",
+    "name": "Pragmatic Opposition",
+    "personality_type": "pragmatic",
+    "behavior": "You are a balanced, methodical debater representing the opposition. Counter arguments systematically, address all points raised, and maintain composure. Adapt your style to match your opponent's approach while staying consistent in your position. Be the steady, reliable voice of reason.",
+    "temperature": 0.7
+  },
+  "moderator_agent": {
+    "id": "mod_neutral",
+    "name": "Neutral Moderator",
+    "personality_type": "neutral",
+    "behavior": "You are an objective, analytical moderator who provides fair summaries of debates. Highlight key arguments from both sides without bias. Note effective strategies, strong performances, and turning points in the debate. Structure your summaries clearly: Overview, Key Proposition Arguments, Key Opposition Arguments, Notable Moments, Conclusion.",
+    "temperature": 0.5
+  }
+}
+Note: Users can add/remove/modify agents in this file. The system will automatically create agents based on this configuration.
+2.2 Create Configuration Loader
+Create backend/config/__init__.py:
+What to implement:
+pythonimport json
+import os
+from typing import Dict, List, Any
+
+class AgentConfig:
+    """Loads and validates agent configuration"""
+    
+    def __init__(self, config_path: str = "config/agent_config.json"):
+        self.config_path = config_path
+        self.config = self._load_config()
+        self._validate_config()
+    
+    def _load_config(self) -> Dict[str, Any]:
+        """Load configuration from JSON file"""
+        try:
+            with open(self.config_path, 'r') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON in configuration file: {e}")
+    
+    def _validate_config(self):
+        """Validate configuration structure"""
+        required_keys = ['debate_config', 'proposition_agents', 'opposition_agent', 'moderator_agent']
+        for key in required_keys:
+            if key not in self.config:
+                raise ValueError(f"Missing required configuration key: {key}")
+        
+        # Validate at least one proposition agent
+        if not self.config['proposition_agents']:
+            raise ValueError("At least one proposition agent is required")
+        
+        # Validate agent structures
+        for agent in self.config['proposition_agents']:
+            self._validate_agent_structure(agent, "proposition")
+        
+        self._validate_agent_structure(self.config['opposition_agent'], "opposition")
+        self._validate_agent_structure(self.config['moderator_agent'], "moderator")
+    
+    def _validate_agent_structure(self, agent: Dict, agent_type: str):
+        """Validate individual agent configuration"""
+        required_fields = ['id', 'name', 'personality_type', 'behavior']
+        for field in required_fields:
+            if field not in agent:
+                raise ValueError(f"Missing required field '{field}' in {agent_type} agent")
+    
+    def get_debate_config(self) -> Dict[str, Any]:
+        """Get debate configuration"""
+        return self.config['debate_config']
+    
+    def get_proposition_agents_config(self) -> List[Dict[str, Any]]:
+        """Get list of proposition agent configurations"""
+        return self.config['proposition_agents']
+    
+    def get_opposition_agent_config(self) -> Dict[str, Any]:
+        """Get opposition agent configuration"""
+        return self.config['opposition_agent']
+    
+    def get_moderator_agent_config(self) -> Dict[str, Any]:
+        """Get moderator agent configuration"""
+        return self.config['moderator_agent']
+    
+    def get_agent_count(self) -> Dict[str, int]:
+        """Get count of each agent type"""
+        return {
+            "proposition": len(self.config['proposition_agents']),
+            "opposition": 1,
+            "moderator": 1,
+            "total": len(self.config['proposition_agents']) + 2
+        }
+
+# Global config instance
+config = AgentConfig()
+2.3 Create Dynamic Agent Factory
+Create backend/agents/agent_factory.py:
+What to implement:
+pythonfrom typing import List, Optional
+import random
+from config import config
+# Import your Agno Agent class
+# from agno import Agent  # Adjust based on actual Agno import
+
+class AgentFactory:
+    """Factory for creating agents dynamically from configuration"""
+    
+    def __init__(self):
+        self.debate_config = config.get_debate_config()
+        self.proposition_configs = config.get_proposition_agents_config()
+        self.opposition_config = config.get_opposition_agent_config()
+        self.moderator_config = config.get_moderator_agent_config()
+        
+        # Cache created agents
+        self._proposition_agents = None
+        self._opposition_agent = None
+        self._moderator_agent = None
+    
+    def _create_agent_from_config(self, agent_config: dict, role: str):
+        """Create a single agent from configuration"""
+        # Get temperature - use agent-specific or fall back to debate config
+        temperature = agent_config.get('temperature', self.debate_config.get('temperature', 0.7))
+        
+        # Create agent using Agno
+        # Adjust this based on actual Agno Agent API
+        agent = Agent(
+            name=agent_config['name'],
+            model=self.debate_config['model'],
+            role=role,
+            temperature=temperature,
+            max_tokens=self.debate_config.get('max_tokens', 1000),
+            streaming=self.debate_config.get('streaming', True),
+            system_prompt=self._build_system_prompt(agent_config, role)
+        )
+        
+        # Add metadata
+        agent.agent_id = agent_config['id']
+        agent.personality_type = agent_config['personality_type']
+        agent.role_type = role
+        
+        return agent
+    
+    def _build_system_prompt(self, agent_config: dict, role: str) -> str:
+        """Build comprehensive system prompt for agent"""
+        base_prompt = f"""You are {agent_config['name']}, participating in a formal debate.
+
+Your Role: {role}
+
+Your Personality and Behavior:
+{agent_config['behavior']}
+
+Debate Guidelines:
+- Keep responses between 100-150 words
+- Stay focused on the topic
+- Address opponent's points directly
+- Be respectful but firm
+- Use your unique personality style to make arguments
+- Make every word count
+
+Remember: You are {agent_config['personality_type']} in your approach. Let this guide your argumentation style.
+"""
+        return base_prompt
+    
+    def create_proposition_agents(self) -> List:
+        """Create all proposition agents from config"""
+        if self._proposition_agents is None:
+            self._proposition_agents = [
+                self._create_agent_from_config(agent_config, "proposition_debater")
+                for agent_config in self.proposition_configs
+            ]
+        return self._proposition_agents
+    
+    def create_opposition_agent(self):
+        """Create opposition agent from config"""
+        if self._opposition_agent is None:
+            self._opposition_agent = self._create_agent_from_config(
+                self.opposition_config,
+                "opposition_debater"
+            )
+        return self._opposition_agent
+    
+    def create_moderator_agent(self):
+        """Create moderator agent from config"""
+        if self._moderator_agent is None:
+            self._moderator_agent = self._create_agent_from_config(
+                self.moderator_config,
+                "moderator"
+            )
+        return self._moderator_agent
+    
+    def get_all_agents(self) -> dict:
+        """Get all agents organized by type"""
+        return {
+            "proposition": self.create_proposition_agents(),
+            "opposition": self.create_opposition_agent(),
+            "moderator": self.create_moderator_agent()
+        }
+    
+    def select_random_proposition(self, exclude_id: Optional[str] = None) -> object:
+        """Randomly select a proposition agent, optionally excluding one"""
+        agents = self.create_proposition_agents()
+        
+        if exclude_id:
+            available_agents = [a for a in agents if a.agent_id != exclude_id]
+        else:
+            available_agents = agents
+        
+        if not available_agents:
+            raise ValueError("No available proposition agents to select")
+        
+        return random.choice(available_agents)
+    
+    def get_agent_by_id(self, agent_id: str):
+        """Get specific agent by ID"""
+        all_agents = (
+            self.create_proposition_agents() + 
+            [self.create_opposition_agent()] + 
+            [self.create_moderator_agent()]
+        )
+        
+        for agent in all_agents:
+            if agent.agent_id == agent_id:
+                return agent
+        
+        raise ValueError(f"Agent with ID '{agent_id}' not found")
+    
+    def get_agent_info(self) -> dict:
+        """Get information about all configured agents"""
+        return {
+            "total_agents": config.get_agent_count()['total'],
+            "proposition_count": config.get_agent_count()['proposition'],
+            "proposition_agents": [
+                {
+                    "id": a['id'],
+                    "name": a['name'],
+                    "personality": a['personality_type']
+                }
+                for a in self.proposition_configs
+            ],
+            "opposition": {
+                "id": self.opposition_config['id'],
+                "name": self.opposition_config['name'],
+                "personality": self.opposition_config['personality_type']
+            },
+            "moderator": {
+                "id": self.moderator_config['id'],
+                "name": self.moderator_config['name'],
+                "personality": self.moderator_config['personality_type']
+            }
+        }
+
+# Global factory instance
+agent_factory = AgentFactory()
+2.4 Update Agent Module Exports
+Create/Update backend/agents/__init__.py:
+What to implement:
+pythonfrom .agent_factory import agent_factory
+
+def get_all_proposition_agents():
+    """Get all proposition agents from config"""
+    return agent_factory.create_proposition_agents()
+
+def get_opposition_agent():
+    """Get opposition agent from config"""
+    return agent_factory.create_opposition_agent()
+
+def get_moderator_agent():
+    """Get moderator agent from config"""
+    return agent_factory.create_moderator_agent()
+
+def get_all_agents():
+    """Get all agents organized by type"""
+    return agent_factory.get_all_agents()
+
+def select_random_proposition(exclude_id=None):
+    """Select random proposition agent"""
+    return agent_factory.select_random_proposition(exclude_id)
+
+def get_agent_info():
+    """Get information about configured agents"""
+    return agent_factory.get_agent_info()
+
+__all__ = [
+    'get_all_proposition_agents',
+    'get_opposition_agent',
+    'get_moderator_agent',
+    'get_all_agents',
+    'select_random_proposition',
+    'get_agent_info',
+    'agent_factory'
+]
+2.5 Create Configuration Validation Script
+Create backend/validate_config.py:
+What to implement:
+python#!/usr/bin/env python3
+"""
+Validate agent configuration file
+"""
+from config import AgentConfig
+from agents import get_agent_info
+from rich.console import Console
+from rich.table import Table
+from rich import print as rprint
+
+console = Console()
+
+def validate_configuration():
+    """Validate and display agent configuration"""
+    try:
+        # Load config
+        config = AgentConfig()
+        console.print("[green]✓ Configuration file loaded successfully[/green]")
+        
+        # Get agent info
+        info = get_agent_info()
+        
+        # Display summary
+        console.print(f"\n[bold]Total Agents:[/bold] {info['total_agents']}")
+        console.print(f"[bold]Proposition Agents:[/bold] {info['proposition_count']}")
+        
+        # Create table for proposition agents
+        prop_table = Table(title="Proposition Agents", show_header=True)
+        prop_table.add_column("ID", style="cyan")
+        prop_table.add_column("Name", style="green")
+        prop_table.add_column("Personality", style="yellow")
+        
+        for agent in info['proposition_agents']:
+            prop_table.add_row(agent['id'], agent['name'], agent['personality'])
+        
+        console.print(prop_table)
+        
+        # Display opposition
+        console.print(f"\n[bold]Opposition Agent:[/bold]")
+        console.print(f"  ID: {info['opposition']['id']}")
+        console.print(f"  Name: {info['opposition']['name']}")
+        console.print(f"  Personality: {info['opposition']['personality']}")
+        
+        # Display moderator
+        console.print(f"\n[bold]Moderator Agent:[/bold]")
+        console.print(f"  ID: {info['moderator']['id']}")
+        console.print(f"  Name: {info['moderator']['name']}")
+        console.print(f"  Personality: {info['moderator']['personality']}")
+        
+        console.print("\n[green]✓ Configuration is valid![/green]")
+        return True
+        
+    except Exception as e:
+        console.print(f"\n[red]✗ Configuration validation failed:[/red]")
+        console.print(f"[red]{str(e)}[/red]")
+        return False
+
+if __name__ == "__main__":
+    validate_configuration()
+```
+
+**Add to requirements.txt:**
+```
+rich>=13.0.0
+2.6 Create Test Script for Dynamic Agents
+Create backend/test_dynamic_agents.py:
+What to implement:
+python#!/usr/bin/env python3
+"""
+Test dynamically created agents
+"""
+from agents import (
+    get_all_proposition_agents,
+    get_opposition_agent,
+    get_moderator_agent,
+    get_agent_info
+)
+from rich.console import Console
+import asyncio
+
+console = Console()
+
+async def test_agent_creation():
+    """Test creating agents from config"""
+    console.print("[bold blue]Testing Dynamic Agent Creation[/bold blue]\n")
+    
+    # Get agent info
+    info = get_agent_info()
+    console.print(f"Total agents configured: {info['total_agents']}")
+    
+    # Create all agents
+    console.print("\n[yellow]Creating proposition agents...[/yellow]")
+    prop_agents = get_all_proposition_agents()
+    console.print(f"✓ Created {len(prop_agents)} proposition agents")
+    
+    for agent in prop_agents:
+        console.print(f"  - {agent.name} ({agent.personality_type})")
+    
+    console.print("\n[yellow]Creating opposition agent...[/yellow]")
+    opp_agent = get_opposition_agent()
+    console.print(f"✓ Created: {opp_agent.name} ({opp_agent.personality_type})")
+    
+    console.print("\n[yellow]Creating moderator agent...[/yellow]")
+    mod_agent = get_moderator_agent()
+    console.print(f"✓ Created: {mod_agent.name} ({mod_agent.personality_type})")
+    
+    return prop_agents, opp_agent, mod_agent
+
+async def test_agent_responses():
+    """Test that each agent responds with their personality"""
+    console.print("\n[bold blue]Testing Agent Personalities[/bold blue]\n")
+    
+    prop_agents, opp_agent, mod_agent = await test_agent_creation()
+    
+    test_prompt = "Make a brief opening statement about why communism is not healthy for the economy."
+    
+    console.print(f"\n[cyan]Test Prompt:[/cyan] {test_prompt}\n")
+    
+    # Test first proposition agent
+    console.print(f"[green]Testing {prop_agents[0].name}:[/green]")
+    # response = await prop_agents[0].run(test_prompt)
+    # console.print(f"Response: {response}\n")
+    console.print("(Actual LLM call - implement based on Agno API)\n")
+    
+    console.print("[green]✓ Agent creation and configuration successful![/green]")
+
+if __name__ == "__main__":
+    asyncio.run(test_agent_responses())
+2.7 Create Example Alternative Configurations
+Create backend/config/agent_config.example_3agents.json:
+Example with only 3 proposition agents:
+json{
+  "debate_config": {
+    "model": "claude-sonnet-4-20250514",
+    "temperature": 0.7,
+    "streaming": true,
+    "max_tokens": 1000
+  },
+  "proposition_agents": [
+    {
+      "id": "prop_logical",
+      "name": "Logic Master",
+      "personality_type": "logical",
+      "behavior": "You are a purely logical debater. Use syllogisms, formal logic, and deductive reasoning. Break down arguments into premises and conclusions. Identify logical fallacies in opponent's arguments.",
+      "temperature": 0.6
+    },
+    {
+      "id": "prop_creative",
+      "name": "Creative Thinker",
+      "personality_type": "creative",
+      "behavior": "You are a creative debater who thinks outside the box. Use unconventional angles, surprising connections, and innovative perspectives. Challenge assumptions and propose novel solutions.",
+      "temperature": 0.9
+    },
+    {
+      "id": "prop_practical",
+      "name": "Practical Realist",
+      "personality_type": "practical",
+      "behavior": "You are a practical debater focused on real-world implementation. Discuss feasibility, costs, benefits, and practical obstacles. Ground arguments in everyday reality and common sense.",
+      "temperature": 0.7
+    }
+  ],
+  "opposition_agent": {
+    "id": "opp_balanced",
+    "name": "Balanced Opposition",
+    "personality_type": "balanced",
+    "behavior": "You represent the opposition with a balanced, measured approach. Consider multiple perspectives, acknowledge valid points while maintaining your position, and present nuanced counter-arguments.",
+    "temperature": 0.7
+  },
+  "moderator_agent": {
+    "id": "mod_analytical",
+    "name": "Analytical Moderator",
+    "personality_type": "analytical",
+    "behavior": "You are an analytical moderator who dissects arguments and identifies patterns. Provide structured summaries with clear categorization of argument types, strengths, and weaknesses from both sides.",
+    "temperature": 0.5
+  }
+}
+Create backend/config/agent_config.example_10agents.json:
+Example with 10 proposition agents (for larger debates):
+json{
+  "debate_config": {
+    "model": "claude-sonnet-4-20250514",
+    "temperature": 0.7,
+    "streaming": true,
+    "max_tokens": 1000
+  },
+  "proposition_agents": [
+    {
+      "id": "prop_economist",
+      "name": "Economist",
+      "personality_type": "economist",
+      "behavior": "Focus on economic theory, market mechanisms, supply and demand, and fiscal policy.",
+      "temperature": 0.6
+    },
+    {
+      "id": "prop_historian",
+      "name": "Historian",
+      "personality_type": "historian",
+      "behavior": "Draw from historical examples, patterns, and lessons learned from past implementations.",
+      "temperature": 0.7
+    },
+    {
+      "id": "prop_philosopher",
+      "name": "Philosopher",
+      "personality_type": "philosopher",
+      "behavior": "Examine underlying assumptions, ethical implications, and philosophical foundations.",
+      "temperature": 0.8
+    },
+    {
+      "id": "prop_scientist",
+      "name": "Data Scientist",
+      "personality_type": "scientist",
+      "behavior": "Use empirical data, statistical analysis, and scientific method to support arguments.",
+      "temperature": 0.6
+    },
+    {
+      "id": "prop_sociologist",
+      "name": "Sociologist",
+      "personality_type": "sociologist",
+      "behavior": "Focus on social structures, community impact, and societal consequences.",
+      "temperature": 0.7
+    },
+    {
+      "id": "prop_psychologist",
+      "name": "Psychologist",
+      "personality_type": "psychologist",
+      "behavior": "Discuss human behavior, motivation, incentive structures, and psychological effects.",
+      "temperature": 0.7
+    },
+    {
+      "id": "prop_lawyer",
+      "name": "Legal Expert",
+      "personality_type": "lawyer",
+      "behavior": "Examine legal frameworks, rights, regulations, and constitutional considerations.",
+      "temperature": 0.6
+    },
+    {
+      "id": "prop_activist",
+      "name": "Social Activist",
+      "personality_type": "activist",
+      "behavior": "Advocate passionately for change, focus on justice, equality, and moral imperatives.",
+      "temperature": 0.9
+    },
+    {
+      "id": "prop_businessman",
+      "name": "Business Leader",
+      "personality_type": "businessman",
+      "behavior": "Discuss entrepreneurship, innovation, market dynamics, and business practicalities.",
+      "temperature": 0.7
+    },
+    {
+      "id": "prop_strategist",
+      "name": "Strategic Planner",
+      "personality_type": "strategist",
+      "behavior": "Think long-term, consider multiple scenarios, and analyze strategic implications.",
+      "temperature": 0.7
+    }
+  ],
+  "opposition_agent": {
+    "id": "opp_comprehensive",
+    "name": "Comprehensive Opposition",
+    "personality_type": "comprehensive",
+    "behavior": "Counter arguments from multiple angles - economic, social, practical, and theoretical. Adapt to each opponent's specialty.",
+    "temperature": 0.7
+  },
+  "moderator_agent": {
+    "id": "mod_comprehensive",
+    "name": "Comprehensive Moderator",
+    "personality_type": "comprehensive",
+    "behavior": "Synthesize arguments from multiple disciplines. Identify cross-cutting themes and points of convergence/divergence.",
+    "temperature": 0.5
+  }
+}
+2.8 Create Configuration Switcher Utility
+Create backend/switch_config.py:
+What to implement:
+python#!/usr/bin/env python3
+"""
+Utility to switch between different agent configurations
+"""
+import shutil
+import os
+from pathlib import Path
+from rich.console import Console
+from rich.prompt import Prompt
+
+console = Console()
+
+def list_available_configs():
+    """List all available configuration files"""
+    config_dir = Path("config")
+    configs = list(config_dir.glob("agent_config*.json"))
+    
+    return [c.name for c in configs if c.name != "agent_config.json"]
+
+def switch_configuration():
+    """Interactive configuration switcher"""
+    console.print("[bold]Available Configurations:[/bold]\n")
+    
+    configs = list_available_configs()
+    
+    if not configs:
+        console.print("[red]No alternative configurations found in config/ directory[/red]")
+        return
+    
+    for idx, config_name in enumerate(configs, 1):
+        console.print(f"{idx}. {config_name}")
+    
+    console.print(f"{len(configs) + 1}. Cancel")
+    
+    choice = Prompt.ask(
+        "\nSelect configuration",
+        choices=[str(i) for i in range(1, len(configs) + 2)],
+        default=str(len(configs) + 1)
+    )
+    
+    choice_idx = int(choice) - 1
+    
+    if choice_idx == len(configs):
+        console.print("Cancelled")
+        return
+    
+    selected_config = configs[choice_idx]
+    
+    # Backup current config
+    current_config = Path("config/agent_config.json")
+    if current_config.exists():
+        backup_path = Path("config/agent_config.backup.json")
+        shutil.copy(current_config, backup_path)
+        console.print(f"[yellow]Backed up current config to {backup_path}[/yellow]")
+    
+    # Copy selected config
+    source = Path("config") / selected_config
+    shutil.copy(source, current_config)
+    
+    console.print(f"[green]✓ Switched to {selected_config}[/green]")
+    console.print("\nRun 'python validate_config.py' to verify the new configuration")
+
+if __name__ == "__main__":
+    switch_configuration()
+2.9 Update Test Agent Script
+Create backend/test_agent.py:
+Updated to work with config system:
+python#!/usr/bin/env python3
+"""
+Test individual agents from configuration
+"""
+from agents import get_all_proposition_agents, get_opposition_agent, get_agent_info
+from rich.console import Console
+from rich.prompt import Prompt
+import asyncio
+
+console = Console()
+
+async def test_single_agent():
+    """Test a single agent interactively"""
+    
+    # Get agent info
+    info = get_agent_info()
+    
+    console.print("[bold]Available Agents:[/bold]\n")
+    
+    # List proposition agents
+    prop_agents = get_all_proposition_agents()
+    for idx, agent in enumerate(prop_agents, 1):
+        console.print(f"{idx}. {agent.name} ({agent.personality_type})")
+    
+    # Add opposition
+    opp_agent = get_opposition_agent()
+    console.print(f"{len(prop_agents) + 1}. {opp_agent.name} ({opp_agent.personality_type})")
+    
+    # Get choice
+    choice = Prompt.ask(
+        "\nSelect agent to test",
+        choices=[str(i) for i in range(1, len(prop_agents) + 2)]
+    )
+    
+    choice_idx = int(choice) - 1
+    
+    if choice_idx < len(prop_agents):
+        selected_agent = prop_agents[choice_idx]
+    else:
+        selected_agent = opp_agent
+    
+    console.print(f"\n[green]Testing: {selected_agent.name}[/green]")
+    console.print(f"Personality: {selected_agent.personality_type}\n")
+    
+    # Get test prompt
+    test_topic = Prompt.ask(
+        "Enter debate topic",
+        default="Communism is not healthy for the economy"
+    )
+    
+    console.print(f"\n[cyan]Prompt:[/cyan] Argue about: {test_topic}\n")
+    
+    # Call agent (adjust based on Agno API)
+    console.print("[yellow]Calling agent...[/yellow]\n")
+    
+    # response = await selected_agent.run(
+    #     f"Make a brief opening argument about: {test_topic}"
+    # )
+    # console.print(f"[green]Response:[/green]\n{response}")
+    
+    console.print("[dim]Note: Actual LLM call - implement based on Agno API[/dim]")
+
+if __name__ == "__main__":
+    asyncio.run(test_single_agent())
+2.10 Create Documentation for Configuration System
+Create backend/config/README.md:
+markdown# Agent Configuration System
+
+## Overview
+The debate system uses a JSON configuration file to dynamically create agents. This allows you to:
+- Add/remove agents without changing code
+- Customize agent personalities and behaviors
+- Create different debate scenarios
+- Easily test different agent compositions
+
+## Configuration File Structure
+
+### File Location
+`config/agent_config.json`
+
+### Structure
+```json
+{
+  "debate_config": {
+    "model": "claude-sonnet-4-20250514",
+    "temperature": 0.7,
+    "streaming": true,
+    "max_tokens": 1000
+  },
+  "proposition_agents": [ /* array of agent configs */ ],
+  "opposition_agent": { /* single agent config */ },
+  "moderator_agent": { /* single agent config */ }
+}
+```
+
+### Agent Configuration Fields
+
+Each agent must have:
+- **id**: Unique identifier (string, no spaces)
+- **name**: Display name for the agent
+- **personality_type**: Short descriptor of personality
+- **behavior**: Detailed behavioral instructions (system prompt)
+- **temperature**: (optional) Override default temperature
+
+## Creating Custom Agents
+
+### Step 1: Define Agent Personality
+Think about:
+- What's their arguing style?
+- What do they value?
+- How do they present arguments?
+- What makes them unique?
+
+### Step 2: Write Behavior Description
+Be specific about:
+- Argument structure
+- Language style
+- Types of evidence they use
+- How they respond to opponents
+
+### Step 3: Add to Config
+```json
+{
+  "id": "prop_creative",
+  "name": "Creative Debater",
+  "personality_type": "creative",
+  "behavior": "Your detailed behavioral description here...",
+  "temperature": 0.8
+}
+```
+
+## Example Configurations
+
+### Minimal (3 Agents)
+See: `agent_config.example_3agents.json`
+- Good for: Quick tests, simple debates
+- Pros: Faster, clearer roles
+- Cons: Less variety
+
+### Standard (5 Agents)
+See: `agent_config.json`
+- Good for: Most debates, balanced variety
+- Pros: Good variety without overwhelm
+- Cons: May still feel repetitive
+
+### Large (10+ Agents)
+See: `agent_config.example_10agents.json`
+- Good for: Long debates, exploring many angles
+- Pros: Maximum variety, comprehensive coverage
+- Cons: Longer debates, more complex to manage
+
+## Switching Configurations
+
+### Method 1: Manual
+```bash
+cp config/agent_config.example_3agents.json config/agent_config.json
+```
+
+### Method 2: Using Utility
+```bash
+python switch_config.py
+```
+
+## Validation
+
+Always validate after creating/modifying config:
+```bash
+python validate_config.py
+```
+
+This checks:
+- JSON syntax
+- Required fields
+- Agent structure
+- Displays summary
+
+## Tips for Good Agent Configurations
+
+1. **Distinct Personalities**: Make each agent clearly different
+2. **Balanced Temperature**: 0.5-0.6 for consistent, 0.8-0.9 for creative
+3. **Clear Behaviors**: Be explicit about style and approach
+4. **Reasonable Count**: 3-7 proposition agents is usually optimal
+5. **Test Individually**: Use `test_agent.py` to verify each agent
+6. **Diverse Perspectives**: Include different reasoning styles
+
+## Troubleshooting
+
+**"Missing required field" error**
+- Check all agents have: id, name, personality_type, behavior
+
+**Agents sound too similar**
+- Make behaviors more specific and distinct
+- Adjust temperatures more dramatically
+
+**Debate too long**
+- Reduce number of proposition agents
+- Decrease exchanges_per_round in workflow
+
+**Votes always tied**
+- Ensure even number of proposition agents
+- Make agent personalities more opinionated
+2.11 Final Testing Checklist for Checkpoint 2
+Create backend/test_checkpoint2.py:
+Complete validation script:
+python#!/usr/bin/env python3
+"""
+Comprehensive test for Checkpoint 2 - Dynamic Agent Creation
+"""
+from rich.console import Console
+from rich.table import Table
+import sys
+
+console = Console()
+
+def run_checkpoint2_tests():
+    """Run all tests for checkpoint 2"""
+    
+    console.print("[bold blue]CHECKPOINT 2 VALIDATION[/bold blue]\n")
+    
+    tests_passed = 0
+    tests_total = 0
+    
+    # Test 1: Config loads
+    console.print("[yellow]Test 1: Configuration Loading[/yellow]")
+    tests_total += 1
+    try:
+        from config import config
+        console.print("  ✓ Config loaded successfully")
+        tests_passed += 1
+    except Exception as e:
+        console.print(f"  ✗ Config loading failed: {e}")
+    
+    # Test 2: Config validation
+    console.print("\n[yellow]Test 2: Configuration Validation[/yellow]")
+    tests_total += 1
+    try:
+        from config import AgentConfig
+        cfg = AgentConfig()
+        console.print("  ✓ Config structure is valid")
+        tests_passed += 1
+    except Exception as e:
+        console.print(f"  ✗ Config validation failed: {e}")
+    
+    # Test 3: Agent factory creation
+    console.print("\n[yellow]Test 3: Agent Factory[/yellow]")
+    tests_total += 1
+    try:
+        from agents.agent_factory import AgentFactory
+        factory = AgentFactory()
+        console.print("  ✓ Agent factory created")
+        tests_passed += 1
+    except Exception as e:
+        console.print(f"  ✗ Agent factory creation failed: {e}")
+    
+    # Test 4: Proposition agents creation
+    console.print("\n[yellow]Test 4: Proposition Agents Creation[/yellow]")
+    tests_total += 1
+    try:
+        from agents import get_all_proposition_agents
+        prop_agents = get_all_proposition_agents()
+        console.print(f"  ✓ Created {len(prop_agents)} proposition agents")
+        tests_passed += 1
+    except Exception as e:
+        console.print(f"  ✗ Proposition agents creation failed: {e}")
+    
+    # Test 5: Opposition agent creation
+    console.print("\n[yellow]Test 5: Opposition Agent Creation[/yellow]")
+    tests_total += 1
+    try:
+        from agents import get_opposition_agent
+        opp = get_opposition_agent()
+        console.print(f"  ✓ Created opposition agent: {opp.name}")
+        tests_passed += 1
+    except Exception as e:
+        console.print(f"  ✗ Opposition agent creation failed: {e}")
+    
+    # Test 6: Moderator agent creation
+    console.print("\n[yellow]Test 6: Moderator Agent Creation[/yellow]")
+    tests_total += 1
+    try:
+        from agents import get_moderator_agent
+        mod = get_moderator_agent()
+        console.print(f"  ✓ Created moderator agent: {mod.name}")
+        tests_passed += 1
+    except Exception as e:
+        console.print(f"  ✗ Moderator agent creation failed: {e}")
+    
+    # Test 7: Random selection
+    console.print("\n[yellow]Test 7: Random Agent Selection[/yellow]")
+    tests_total += 1
+    try:
+        from agents import select_random_proposition
+        random_agent = select_random_proposition()
+        console.print(f"  ✓ Selected random agent: {random_agent.name}")
+        tests_passed += 1
+    except Exception as e:
+        console.print(f"  ✗ Random selection failed: {e}")
+    
+    # Test 8: Agent info retrieval
+    console.print("\n[yellow]Test 8: Agent Information Retrieval[/yellow]")
+    tests_total += 1
+    try:
+        from agents import get_agent_info
+        info = get_agent_info()
+        console.print(f"  ✓ Retrieved info for {info['total_agents']} total agents")
+        tests_passed += 1
+    except Exception as e:
+        console.print(f"  ✗ Info retrieval failed: {e}")
+    
+    # Results
+    console.print(f"\n[bold]Results: {tests_passed}/{tests_total} tests passed[/bold]")
+    
+    if tests_passed == tests_total:
+        console.print("[green]✓ All tests passed! Checkpoint 2 complete.[/green]")
+        return True
+    else:
+        console.print(f"[red]✗ {tests_total - tests_passed} test(s) failed[/red]")
+        return False
+
+if __name__ == "__main__":
+    success = run_checkpoint2_tests()
+    sys.exit(0 if success else 1)
+
+Success Criteria for Checkpoint 2
+✅ Configuration System:
+
+ agent_config.json file created and valid
+ Configuration loader works
+ Validation catches errors
+
+✅ Agent Factory:
+
+ Dynamically creates agents from config
+ All agent types supported
+ Random selection works
+ Agent metadata preserved
+
+✅ Testing:
+
+ Validation script runs successfully
+ Can list all configured agents
+ Can test individual agents
+ Can switch between configurations
+
+✅ Documentation:
+
+ Config schema documented
+ Examples provided (3, 5, 10 agents)
+ Clear instructions for customization
+
+✅ Flexibility:
+
+ Easy to add new agents
+ Easy to modify behaviors
+ Easy to change agent count
+ No code changes needed for agent modifications

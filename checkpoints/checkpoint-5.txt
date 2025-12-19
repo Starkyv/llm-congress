@@ -1,0 +1,766 @@
+CHECKPOINT 5: Implementing the Complete Debate Workflow
+Goal
+Build the main debate orchestration using Agno's Workflow system. This workflow will coordinate all agents, tools, and state to run a complete debate simulation from initialization to conclusion.
+
+Understanding Agno Workflows for This Project
+Based on Agno's documentation, Workflows are designed to:
+
+Orchestrate multiple steps in sequence
+Manage state across steps
+Handle conditional logic and loops
+Execute parallel operations
+Provide error handling and recovery
+
+Your debate is a perfect workflow because it has:
+
+Sequential steps: Initialize → Debate → Vote → Conclude
+Loops: Debate rounds repeat until time expires
+Conditionals: If voted out → switch agent, else continue
+Parallel operations: 4 observers vote simultaneously
+State management: Track everything throughout
+
+
+Workflow Structure Overview
+High-Level Flow:
+DebateWorkflow
+│
+├── Step 1: Initialize
+│   ├── Load agents from config
+│   ├── Select first proposition agent
+│   ├── Create initial DebateState
+│   ├── Start timer
+│   └── Emit DEBATE_STARTED event
+│
+├── Step 2: Main Debate Loop (while time remains)
+│   │
+│   ├── Step 2.1: Proposition Turn
+│   │   ├── Get debate context (using Context Builder Tool)
+│   │   ├── Build debate prompt
+│   │   ├── Call proposition agent (streaming)
+│   │   ├── Add message to state
+│   │   └── Emit message events
+│   │
+│   ├── Step 2.2: Opposition Turn
+│   │   ├── Get debate context
+│   │   ├── Build debate prompt
+│   │   ├── Call opposition agent (streaming)
+│   │   ├── Add message to state
+│   │   └── Emit message events
+│   │
+│   ├── Step 2.3: Check Round Completion
+│   │   ├── Increment exchange counter
+│   │   ├── If exchanges >= threshold → trigger voting
+│   │   └── Otherwise → continue loop
+│   │
+│   ├── Step 2.4: Voting Phase (conditional)
+│   │   ├── Pause timer
+│   │   ├── Start voting round in state
+│   │   ├── Emit VOTING_INITIATED event
+│   │   ├── Call 4 observer agents in PARALLEL
+│   │   │   ├── Observer 1 evaluates → emits vote
+│   │   │   ├── Observer 2 evaluates → emits vote
+│   │   │   ├── Observer 3 evaluates → emits vote
+│   │   │   └── Observer 4 evaluates → emits vote
+│   │   ├── Parse votes (using Vote Formatter Tool)
+│   │   ├── Add votes to state
+│   │   ├── Complete voting round in state
+│   │   ├── Emit VOTING_COMPLETE event
+│   │   └── Resume timer
+│   │
+│   ├── Step 2.5: Agent Switch Decision (conditional)
+│   │   ├── If majority voted out:
+│   │   │   ├── Select new random proposition agent
+│   │   │   ├── Record switch in state
+│   │   │   ├── Update active/observer agents
+│   │   │   └── Emit AGENT_SWITCH event
+│   │   └── If stayed → continue with same agent
+│   │
+│   ├── Step 2.6: Timer Check
+│   │   ├── Update timer in state
+│   │   ├── Emit TIMER_UPDATE event
+│   │   └── Check if time expired → exit loop or continue
+│   │
+│   └── LOOP back to Step 2.1 if time remains
+│
+└── Step 3: Conclusion
+    ├── Calculate statistics (using Statistics Tool)
+    ├── Build moderation prompt
+    ├── Call moderator agent (streaming)
+    ├── Emit moderator summary events
+    └── Emit DEBATE_COMPLETE event
+
+Workflow Definition
+Main Workflow Class: DebateWorkflow
+Purpose: Orchestrate the entire debate simulation
+Inputs (when workflow starts):
+
+Topic (string)
+Duration (int - seconds)
+Optional: Exchanges per round (int, default 3)
+Optional: First proposition agent ID (string, random if not provided)
+
+Outputs (when workflow completes):
+
+Final DebateState (with complete history)
+Statistics summary
+Moderator's summary text
+
+State:
+
+Uses DebateState throughout all steps
+State persists and updates across steps
+
+Event Emissions:
+
+Emits events at each major step for UI streaming
+
+
+Detailed Step Breakdown
+Step 1: Initialize (initialize_debate)
+Purpose: Set up debate environment
+Operations:
+
+Load Agents
+
+Get all proposition agents from agent factory
+Get opposition agent
+Get moderator agent
+Validate all agents loaded successfully
+
+
+Select First Debater
+
+If first agent ID provided → use that
+Otherwise → randomly select from proposition agents
+
+
+Create Initial State
+
+Call initialize_state() operation
+Set topic, duration, exchanges_per_round
+Set active proposition agent
+Set opposition agent
+Set observer agents (all proposition agents except active one)
+Initialize empty lists (messages, votes, switches)
+Start timer
+Set phase to "debating"
+
+
+Emit Start Event
+
+Event type: DEBATE_STARTED
+Data: topic, duration, first agent name, all participant names
+
+
+
+Error Handling:
+
+If agents can't load → raise error, don't start debate
+If state initialization fails → raise error with details
+
+Returns: Updated DebateState
+
+Step 2.1: Proposition Turn (proposition_debate_turn)
+Purpose: Active proposition agent makes an argument
+Inputs:
+
+Current DebateState
+
+Operations:
+
+Prepare Context
+
+Call Context Builder Tool with state.messages
+Get formatted recent history
+Extract opponent's last argument
+Get agent's personality type
+
+
+Build Prompt
+
+Use debate prompt template
+Include: topic, stance ("for"), context, opponent's last argument, personality
+
+
+Call Agent (Streaming)
+
+Get active proposition agent from agent factory
+Call agent with prompt
+Stream response chunk by chunk
+For each chunk:
+
+Emit AGENT_MESSAGE_CHUNK event
+Accumulate full response
+
+
+
+
+Update State
+
+Create Message object with full response
+Call add_message() operation
+Update state with new message
+
+
+Emit Completion
+
+Emit AGENT_MESSAGE_COMPLETE event
+
+
+
+Error Handling:
+
+If agent call fails → retry once
+If retry fails → emit error event, use fallback message
+Continue workflow (don't crash entire debate)
+
+Returns: Updated DebateState
+
+Step 2.2: Opposition Turn (opposition_debate_turn)
+Purpose: Opposition agent responds
+Operations:
+
+Same as proposition turn, but:
+
+Use opposition agent
+Stance is "against"
+Extract proposition's last argument as context
+
+
+
+Returns: Updated DebateState
+
+Step 2.3: Check Round Completion (check_round_completion)
+Purpose: Decide if it's time to vote
+Inputs:
+
+Current DebateState
+
+Operations:
+
+Check Exchange Count
+
+If state.current_exchange >= state.exchanges_per_round:
+
+Return True (trigger voting)
+
+
+Otherwise:
+
+Return False (continue debate)
+
+
+
+
+Check Timer
+
+If time expired:
+
+Return "time_expired" (skip voting, go to conclusion)
+
+
+
+
+
+Returns:
+
+Boolean (trigger_voting) OR "time_expired"
+
+
+Step 2.4: Voting Phase (conduct_voting)
+Purpose: Observers evaluate current debater
+Inputs:
+
+Current DebateState
+
+Operations:
+
+Prepare for Voting
+
+Call start_voting_round() operation
+Update state: phase = "voting", is_paused = True
+Emit VOTING_INITIATED event
+
+
+Get Evaluation Context
+
+Call Context Builder Tool
+Get last 6 messages (recent performance)
+Get agent being evaluated (state.active_proposition_id)
+
+
+Build Vote Prompts
+
+For each observer agent:
+
+Use vote prompt template
+Include: debater name, recent exchanges, voter's personality
+
+
+
+
+Call Observers in PARALLEL
+
+Use Agno's parallel execution feature
+Run 4 observer agents simultaneously
+Each returns raw vote response
+
+
+Process Votes
+
+For each raw response:
+
+Call Vote Formatter Tool
+Extract vote and reasoning
+Call add_vote() operation
+Emit VOTE_CAST event with vote details
+
+
+
+
+Complete Voting
+
+Call complete_voting_round() operation
+Calculate final tally
+Determine decision (switch or stay)
+Emit VOTING_COMPLETE event
+Update state: phase = "debating", is_paused = False
+
+
+
+Error Handling:
+
+If observer fails → default vote "in" (don't penalize debater)
+If Vote Formatter fails → try parsing manually
+If all parsing fails → log error, skip that vote
+
+Returns:
+
+Updated DebateState
+Decision ("switch" or "stay")
+
+
+Step 2.5: Agent Switch Decision (handle_agent_switch)
+Purpose: Switch proposition agent if voted out
+Inputs:
+
+Current DebateState
+Decision from voting ("switch" or "stay")
+
+Operations:
+If decision == "switch":
+
+Select New Agent
+
+Call agent factory's select_random_proposition()
+Exclude current active agent
+Get new agent
+
+
+Update State
+
+Record switch with record_agent_switch() operation
+Update state.active_proposition_id to new agent
+Update state.observer_ids (old agent in, new agent out)
+
+
+Emit Event
+
+Emit AGENT_SWITCH event
+Include: old agent name, new agent name, reason, vote tally
+
+
+
+If decision == "stay":
+
+Do nothing, continue with same agent
+
+Returns: Updated DebateState
+
+Step 2.6: Timer Check (update_and_check_timer)
+Purpose: Track time and decide if debate should continue
+Inputs:
+
+Current DebateState
+
+Operations:
+
+Update Timer
+
+Call update_timer() operation
+Calculate elapsed time
+Update state
+
+
+Emit Timer Event
+
+Emit TIMER_UPDATE event
+Include: elapsed time, remaining time
+
+
+Check Expiration
+
+If remaining time <= 0:
+
+Return "expired"
+
+
+Otherwise:
+
+Return "continue"
+
+
+
+
+
+Returns:
+
+Updated DebateState
+Status ("continue" or "expired")
+
+
+Step 2: Main Loop Logic (debate_loop)
+Purpose: Orchestrate the repeating debate cycle
+Pseudocode:
+WHILE timer_status == "continue":
+    
+    // Debate exchange
+    state = proposition_turn(state)
+    state = opposition_turn(state)
+    
+    // Check if voting time
+    should_vote = check_round_completion(state)
+    
+    IF should_vote == True:
+        // Voting phase
+        state, decision = conduct_voting(state)
+        
+        // Handle switch if needed
+        state = handle_agent_switch(state, decision)
+    
+    ELIF should_vote == "time_expired":
+        BREAK  // Exit loop
+    
+    // Update timer
+    state, timer_status = update_and_check_timer(state)
+    
+END WHILE
+Error Handling:
+
+Catch any step errors
+Log error details
+Emit ERROR event
+Try to continue (don't crash entire debate)
+If critical error → break loop gracefully
+
+Returns: Final DebateState after all rounds
+
+Step 3: Conclusion (conclude_debate)
+Purpose: Generate final summary
+Inputs:
+
+Final DebateState
+
+Operations:
+
+Update State
+
+Set phase to "concluding"
+Emit PHASE_CHANGE event
+
+
+Calculate Statistics
+
+Call Statistics Tool with full state
+Get: message counts, vote tallies, switches, timing
+
+
+Build Moderation Prompt
+
+Use moderate prompt template
+Include: topic, full transcript, statistics, vote history
+
+
+Call Moderator (Streaming)
+
+Get moderator agent
+Call with prompt
+Stream response chunk by chunk
+Emit MODERATOR_MESSAGE_CHUNK events
+
+
+Finalize
+
+Update state: phase = "completed", status = "completed"
+Emit DEBATE_COMPLETE event with final statistics
+
+
+
+Error Handling:
+
+If moderator fails → generate simple summary from statistics
+Ensure DEBATE_COMPLETE is always emitted
+
+Returns: Final DebateState with summary
+
+Workflow Configuration
+Workflow Parameters:
+class DebateWorkflowConfig:
+    - topic: str
+    - duration: int (default 300)
+    - exchanges_per_round: int (default 3)
+    - first_agent_id: Optional[str] (default None)
+    - enable_streaming: bool (default True)
+    - stream_chunk_delay: float (default 0.05)
+Workflow Metadata:
+Workflow Name: "Debate Simulation"
+Version: "1.0.0"
+Description: "Multi-agent debate with voting and moderation"
+Tags: ["debate", "multi-agent", "simulation"]
+
+Error Handling Strategy
+Error Levels:
+Level 1: Recoverable (Continue Workflow)
+
+Agent timeout → retry once → use fallback
+Vote parsing failure → default vote "in"
+Single tool failure → log and continue
+
+Level 2: Degraded Mode (Continue with Warnings)
+
+Multiple agent failures → emit warning events
+Repeated tool errors → reduce functionality
+Timer issues → continue with estimates
+
+Level 3: Critical (Graceful Shutdown)
+
+State corruption → save what's possible, end debate
+All agents fail → cannot continue
+Unrecoverable Agno error → clean shutdown
+
+Error Emission:
+For all errors:
+
+Emit ERROR event with details
+Log to backend logs
+Update state with error info
+Try to continue if possible
+
+
+Parallel Execution
+Voting Parallelization:
+Agno supports parallel task execution. Use it for voting:
+Parallel Block: "Observer Voting"
+├── Task 1: Observer Agent 1 votes
+├── Task 2: Observer Agent 2 votes
+├── Task 3: Observer Agent 3 votes
+└── Task 4: Observer Agent 4 votes
+
+Wait for all 4 to complete
+Then: Process all votes together
+Benefits:
+
+Voting is 4x faster
+Observers don't influence each other
+More realistic (simultaneous judgment)
+
+Error Handling:
+
+If one observer fails → continue with other 3
+If all 4 fail → skip voting round (rare)
+
+
+Testing Strategy
+Test 1: Workflow Initialization
+Setup:
+
+Create workflow with test topic
+Run initialize step only
+
+Verify:
+
+State created correctly
+Agents loaded
+First debater selected
+Events emitted
+
+Test 2: Single Debate Turn
+Setup:
+
+Initialize workflow
+Run one proposition turn
+
+Verify:
+
+Context built correctly
+Agent called with proper prompt
+Message added to state
+Events emitted in order
+
+Test 3: Complete Exchange
+Setup:
+
+Initialize workflow
+Run proposition + opposition turns
+
+Verify:
+
+Both messages in state
+Exchange counter incremented
+Both agents used correct context
+
+Test 4: Voting Phase
+Setup:
+
+Initialize workflow with exchanges_per_round=1
+Run 1 exchange
+Trigger voting
+
+Verify:
+
+All 4 observers called in parallel
+Votes parsed correctly
+Tally calculated
+Decision made
+
+Test 5: Agent Switch
+Setup:
+
+Initialize workflow
+Force voting result to "switch"
+Run switch logic
+
+Verify:
+
+New agent selected
+State updated correctly
+Observers updated
+Events emitted
+
+Test 6: Full Short Debate
+Setup:
+
+Run complete workflow with 60 second duration
+
+Verify:
+
+Debate runs start to finish
+Multiple rounds complete
+Voting happens multiple times
+Moderator summarizes
+No errors or crashes
+
+Test 7: Error Recovery
+Setup:
+
+Mock agent failure
+Run workflow
+
+Verify:
+
+Error caught gracefully
+Workflow continues
+Error event emitted
+Debate completes
+
+Test 8: Timer Expiration
+Setup:
+
+Run workflow with 30 second duration
+Wait for expiration
+
+Verify:
+
+Debate stops when time expires
+Mid-round stop handled gracefully
+Conclusion runs
+Final events emitted
+
+
+Integration Points
+With State (Checkpoint 4):
+Workflow creates and updates state throughout:
+- Initialize step creates DebateState
+- Each step receives current state
+- Each step returns updated state
+- Agno manages state persistence
+With Tools (Checkpoint 3):
+Workflow calls tools at specific steps:
+- Context Builder before each turn
+- Vote Formatter after each vote
+- Statistics Calculator before conclusion
+With Agents (Checkpoint 2):
+Workflow retrieves and calls agents:
+- Get agents from factory
+- Call with generated prompts
+- Handle streaming responses
+- Process agent outputs
+With Streaming (Checkpoint 5):
+Workflow emits events throughout:
+- Each major step emits event
+- Agent streaming triggers chunk events
+- State changes trigger update events
+- Events flow to SSE handler
+
+File Structure
+backend/
+├── workflows/
+│   ├── __init__.py
+│   ├── debate_workflow.py       # Main workflow class
+│   ├── steps/
+│   │   ├── __init__.py
+│   │   ├── initialize.py        # Initialize step
+│   │   ├── debate_turn.py       # Debate turn logic
+│   │   ├── voting.py            # Voting phase logic
+│   │   ├── agent_switch.py      # Switch logic
+│   │   └── conclude.py          # Conclusion logic
+│   └── config.py                # Workflow configuration
+└── tests/
+    ├── test_workflow_init.py
+    ├── test_debate_turns.py
+    ├── test_voting_phase.py
+    └── test_full_workflow.py
+
+Success Criteria
+✅ Workflow Structure:
+
+Main workflow class defined using Agno Workflow
+All steps defined and connected
+State flows through all steps
+Error handling at each step
+
+✅ Debate Flow:
+
+Initialize works correctly
+Debate turns alternate properly
+Voting triggers at right time
+Agent switching works
+Timer controls flow
+Conclusion generates summary
+
+✅ Parallel Execution:
+
+Voting runs 4 observers in parallel
+Results collected correctly
+No race conditions
+
+✅ Integration:
+
+Uses state management correctly
+Calls tools appropriately
+Retrieves agents properly
+Emits events for streaming
+
+✅ Testing:
+
+Each step tested independently
+Full workflow tested end-to-end
+Error scenarios tested
+Edge cases handled
+
+✅ Performance:
+
+No memory leaks
+Proper cleanup
+Efficient state updates
+Reasonable execution time

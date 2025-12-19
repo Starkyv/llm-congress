@@ -1,0 +1,115 @@
+Project Structure
+├── backend/
+│   ├── agents/
+│   │   ├── __init__.py
+│   │   ├── proposition_agents.py
+│   │   ├── opposition_agent.py
+│   │   └── moderator_agent.py
+│   ├── tasks/
+│   │   ├── __init__.py
+│   │   ├── debate_task.py
+│   │   ├── vote_task.py
+│   │   └── moderate_task.py
+│   ├── workflows/
+│   │   ├── __init__.py
+│   │   └── debate_workflow.py
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── timer.py
+│   │   ├── vote_tallier.py
+│   │   ├── agent_selector.py
+│   │   └── state_manager.py
+│   ├── streaming/
+│   │   ├── __init__.py
+│   │   ├── event_emitter.py
+│   │   └── sse_handler.py
+│   ├── main.py
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── DebateView.jsx
+│   │   │   ├── VotePanel.jsx
+│   │   │   ├── TimerDisplay.jsx
+│   │   │   └── ModeratorSummary.jsx
+│   │   ├── services/
+│   │   │   └── eventSource.js
+│   │   └── App.jsx
+│   └── package.json
+└── README.md
+
+
+
+CHECKPOINT 1: Environment Setup & Basic Agent Creation
+Goal
+Set up the project structure, install dependencies, and create your first basic agent.
+Tasks
+1.1 Create Project Structure
+
+mkdir -p backend/agents backend/tasks backend/workflows backend/utils backend/streaming
+mkdir -p frontend/src/components frontend/src/services
+touch backend/agents/__init__.py
+touch backend/tasks/__init__.py
+touch backend/workflows/__init__.py
+touch backend/utils/__init__.py
+touch backend/streaming/__init__.py
+```
+
+### 1.2 Install Dependencies
+Create `backend/requirements.txt`:
+```
+agno
+anthropic
+fastapi
+uvicorn
+python-dotenv
+pydantic
+Install:
+bashcd backend
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### 1.3 Create Environment Configuration
+Create `backend/.env`:
+```
+ANTHROPIC_API_KEY=your_api_key_here
+MODEL_NAME=claude-sonnet-4-20250514
+1.4 Create Your First Agent (Analytical Proposition)
+Create backend/agents/proposition_agents.py:
+What to implement:
+
+Import Agno Agent class
+Define PropositionAnalytical agent with:
+
+Name: "Analytical Debater"
+Role: "proposition_debater"
+Model: Claude Sonnet 4
+System prompt that emphasizes: data-driven arguments, logical reasoning, statistics, evidence-based approach
+Streaming enabled: True
+Temperature: 0.7
+
+
+
+Expected behavior:
+
+Agent should be instantiable
+Should have a clear analytical personality in system prompt
+
+1.5 Test Basic Agent
+Create backend/test_agent.py:
+What to implement:
+
+Load environment variables
+Instantiate the Analytical agent
+Send a test prompt: "Argue why communism is not healthy for the economy using data"
+Print the response
+
+Run test:
+bashpython test_agent.py
+Success criteria:
+
+Agent responds with analytical, data-focused argument
+No errors
+Response shows logical reasoning

@@ -1,0 +1,11 @@
+{
+    "python.defaultInterpreterPath": "/Users/mothil/llm/llm-congress/venv/bin/python",
+    "python.analysis.extraPaths": [
+        "/Users/mothil/llm/llm-congress/backend"
+    ],
+    "python.analysis.autoSearchPaths": true,
+    "python.analysis.diagnosticMode": "workspace",
+    "python.languageServer": "Pylance"
+}
+
+
