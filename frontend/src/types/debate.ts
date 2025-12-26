@@ -6,6 +6,7 @@ export interface Agent {
   role: 'proposition' | 'opposition';
   isActive: boolean;
   isSpeaking: boolean;
+  icon?: string;
   voteStatus?: 'in' | 'out' | null;
   streamingContent?: string; // Current streaming text for this agent
 }

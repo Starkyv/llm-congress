@@ -80,10 +80,10 @@ def conduct_voting(
             voter_personality=observer_agent.personality_type
         )
         
-        # Get vote from observer
+        # Get vote from observer (stream=False for RunOutput with .content)
         try:
             prompt = vote_task.build_prompt()
-            response = observer_agent.run(prompt)
+            response = observer_agent.run(prompt, stream=False)
             raw_response = response.content if response else ""
             
             # Parse vote

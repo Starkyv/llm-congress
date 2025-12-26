@@ -10,13 +10,20 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
+    "@tippyjs/react": "^4.2.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "streamdown": "^1.6.10"
+    "react-router-dom": "^7.11.0",
+    "streamdown": "^1.6.10",
+    "tippy.js": "^6.3.7",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
+    "@types/node": "^25.0.3",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
+    "@types/react-router-dom": "^5.3.3",
     "@typescript-eslint/eslint-plugin": "^6.14.0",
     "@typescript-eslint/parser": "^6.14.0",
     "@vitejs/plugin-react": "^4.2.1",

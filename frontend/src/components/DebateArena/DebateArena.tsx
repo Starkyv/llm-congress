@@ -89,6 +89,7 @@ export function DebateArena({
               key={agent.id}
               id={agent.id}
               name={agent.name}
+              icon={agent.icon}
               isActive={agent.id === activePropositionId}
               isSpeaking={
                 agent.name === currentSpeaker &&
@@ -107,6 +108,7 @@ export function DebateArena({
       {oppositionAgent && (
         <OppositionAgent
           name={oppositionAgent.name}
+          icon={oppositionAgent.icon}
           isSpeaking={currentSpeakerRole === "opposition"}
         />
       )}

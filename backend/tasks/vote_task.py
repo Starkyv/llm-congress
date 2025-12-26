@@ -72,11 +72,11 @@ Consider what matters most to someone with your viewpoint.
 
 RESPONSE FORMAT:
 You MUST respond ONLY with valid JSON in this exact format:
-{{"vote": "in", "reasoning": "Your 1-2 sentence explanation"}}
+{{"vote": "in", "reasoning": "Your 1-2 words explanation"}}
 
 OR
 
-{{"vote": "out", "reasoning": "Your 1-2 sentence explanation"}}
+{{"vote": "out", "reasoning": "Your 1-2 words explanation"}}
 
 Respond with ONLY the JSON, no other text."""
 

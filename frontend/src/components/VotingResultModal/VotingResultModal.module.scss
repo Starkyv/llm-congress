@@ -1,0 +1,174 @@
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  padding: 40px 48px;
+  animation: slideUp 0.3s ease-out;
+  min-width: 400px;
+  max-width: 500px;
+}
+
+.stayModal {
+  border: 2px solid #b99dfa;
+
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
+}
+
+.outModal {
+  border: 2px solid #ffa2a2;
+
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.iconCircle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+// .stayIcon {
+//   background: #8b5cf6;
+//   border: 2px solid #a78bfa;
+// }
+
+// .outIcon {
+//   background: #ef4444;
+//   border: 2px solid #f87171;
+// }
+
+.checkmark {
+  color: white;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.cross {
+  color: white;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.heading {
+  font-family: Inter;
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.stayHeading {
+  color: #1f2937;
+}
+
+.outHeading {
+  color: #dc2626;
+}
+
+.voteInfo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0px;
+  width: 100%;
+}
+
+.voteCount {
+  text-align: center;
+}
+
+.voteText {
+  font-family: Inter;
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 24px;
+  letter-spacing: -0.31px;
+  color: #364153
+}
+
+.stayNumber {
+  color: #8b5cf6;
+  font-weight: 600;
+}
+
+.outNumber {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.threshold {
+  font-family: Inter;
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 24px;
+  letter-spacing: -0.31px;
+  color: #364153
+}
+
+.reason {
+  width: 100%;
+  padding: 16px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  border-left: 4px solid #6b7280;
+}
+
+.reasonLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.reasonText {
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.5;
+}

@@ -8,6 +8,7 @@ from typing import List, Optional
 import random
 import sys
 import os
+from agno.models.openrouter import OpenRouter
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -36,20 +37,25 @@ class AgentFactory:
         # Get temperature - use agent-specific or fall back to debate config
         temperature = agent_config.get('temperature', self.debate_config.get('temperature', 0.7))
         
+        # Get model - use agent-specific or fall back to debate config
+        model_id = agent_config.get('model', self.debate_config.get('model', 'gpt-4o-mini'))
+        
         # Build system prompt
         system_prompt = self._build_system_prompt(agent_config, role)
         
-        # Create agent using Agno with OpenAI
+        # Create agent using Agno with OpenRouter
         agent = Agent(
             name=agent_config['name'],
             role=role,
-            model=OpenAIChat(
-                id=self.debate_config['model'],
+            model=OpenRouter(
+                id=model_id,
                 # temperature=temperature,
                 max_completion_tokens=self.debate_config.get('max_tokens', 1000),
             ),
             instructions=[system_prompt],
             markdown=True,
+            reasoning=False
+            # stream=True,
         )
         
         # Add metadata as attributes
@@ -61,22 +67,7 @@ class AgentFactory:
     
     def _build_system_prompt(self, agent_config: dict, role: str) -> str:
         """Build comprehensive system prompt for agent"""
-        base_prompt = f"""You are {agent_config['name']}, participating in a formal debate.
-
-Your Role: {role}
-
-Your Personality and Behavior:
-{agent_config['behavior']}
-
-Debate Guidelines:
-- Keep responses between 100-150 words
-- Stay focused on the topic
-- Address opponent's points directly
-- Be respectful but firm
-- Use your unique personality style to make arguments
-- Make every word count
-
-Remember: You are {agent_config['personality_type']} in your approach. Let this guide your argumentation style."""
+        base_prompt = f"""You are {agent_config['name']}, participating in a formal debate. {agent_config['behavior']} Keep your responses between 50-100 words and address your opponent's points directly."""
         return base_prompt
     
     def create_proposition_agents(self) -> List[Agent]:
@@ -151,14 +142,16 @@ Remember: You are {agent_config['personality_type']} in your approach. Let this 
                 {
                     "id": a['id'],
                     "name": a['name'],
-                    "personality": a['personality_type']
+                    "personality": a['personality_type'],
+                    "icon": a.get('icon')
                 }
                 for a in self.proposition_configs
             ],
             "opposition": {
                 "id": self.opposition_config['id'],
                 "name": self.opposition_config['name'],
-                "personality": self.opposition_config['personality_type']
+                "personality": self.opposition_config['personality_type'],
+                "icon": self.opposition_config.get('icon')
             },
             "moderator": {
                 "id": self.moderator_config['id'],

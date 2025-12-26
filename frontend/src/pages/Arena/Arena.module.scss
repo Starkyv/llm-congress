@@ -1,0 +1,140 @@
+.arena {
+  min-height: 100vh;
+  padding: 2rem;
+  background-color: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.topicSection {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.liveIndicator {
+  padding: 4px 8px;
+  background-color: #ef4444;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  animation: pulse 1.5s infinite;
+}
+
+.phaseIndicator {
+  padding: 4px 8px;
+  background-color: #8b5cf6;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.topicText {
+  font-family: Inter;
+  font-weight: 400;
+  font-style: Regular;
+  font-size: 18px;
+
+  line-height: 100%;
+  letter-spacing: -0.44px;
+  color: #0a0a0a80;
+}
+
+.controlsSection {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.queueInfo {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  background-color: #f3f4f6;
+  border-radius: 6px;
+}
+
+.queueCount {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.controlButtons {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.controlButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #d1d5db;
+  background-color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+
+  &:hover:not(:disabled) {
+    background-color: #f9fafb;
+    border-color: #9ca3af;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &:active:not(:disabled) {
+    background-color: #f3f4f6;
+  }
+}
+
+.timerSection {
+  display: flex;
+  align-items: center;
+}
+
+.timer {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #374151;
+  font-variant-numeric: tabular-nums;
+}
+
+.middleSpace {
+  flex: 1;
+  width: 100%;
+  // Middle space - to be designed later
+}

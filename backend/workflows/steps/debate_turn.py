@@ -6,32 +6,28 @@ Handles proposition and opposition debate turns.
 
 import sys
 import os
-from typing import Dict, Any, Generator, Optional
+from typing import Dict, Any, Generator
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from state import add_message
 from tasks import get_debate_task
-from utils.state_queries import get_recent_history_formatted
-from utils.state_helpers import get_last_message_content
 from workflows.config import DebateEvent, DebateEventType
 from workflows.steps.initialize import get_agent_by_id
 
 
 def proposition_turn(
-    state: Dict[str, Any],
-    stream: bool = True
+    state: Dict[str, Any]
 ) -> Generator[DebateEvent, None, Dict[str, Any]]:
     """
     Execute a proposition agent's turn.
     
     Args:
         state: Current debate state
-        stream: Whether to stream response
         
     Yields:
-        DebateEvent objects for streaming
+        DebateEvent objects for agent completion
         
     Returns:
         Updated state dict
@@ -45,7 +41,6 @@ def proposition_turn(
     
     # Get debate context
     topic = state.get("topic", "")
-    recent_history = get_recent_history_formatted(state, n=5)
     
     # Get opponent's last argument
     messages = state.get("messages", [])
@@ -70,29 +65,14 @@ def proposition_turn(
     # Build prompt
     prompt = task.build_prompt()
     
-    # Call agent
+    # Call agent and get full response (non-streaming)
+    # Must explicitly set stream=False to get RunOutput object with .content
     try:
-        response = agent.run(prompt)
-        full_content = response.content if response else ""
+        response = agent.run(prompt, stream=False)
+        print(f"Proposition response: {response}")
+        full_content = response.content if response and response.content else ""
         
-        # Emit chunks for streaming effect
-        if stream and full_content:
-            words = full_content.split()
-            chunk_size = 5
-            for i in range(0, len(words), chunk_size):
-                chunk = " ".join(words[i:i+chunk_size])
-                yield DebateEvent(
-                    event_type=DebateEventType.AGENT_MESSAGE_CHUNK,
-                    data={
-                        "agent_id": active_id,
-                        "agent_name": agent.name,
-                        "role": "proposition",
-                        "chunk": chunk,
-                    },
-                    timestamp=datetime.now().isoformat()
-                )
-        
-        # Emit completion event
+        # Emit completion event with full response
         yield DebateEvent(
             event_type=DebateEventType.AGENT_MESSAGE_COMPLETE,
             data={
@@ -140,18 +120,16 @@ def proposition_turn(
 
 
 def opposition_turn(
-    state: Dict[str, Any],
-    stream: bool = True
+    state: Dict[str, Any]
 ) -> Generator[DebateEvent, None, Dict[str, Any]]:
     """
     Execute the opposition agent's turn.
     
     Args:
         state: Current debate state
-        stream: Whether to stream response
         
     Yields:
-        DebateEvent objects for streaming
+        DebateEvent objects for agent completion
         
     Returns:
         Updated state dict
@@ -189,29 +167,13 @@ def opposition_turn(
     # Build prompt
     prompt = task.build_prompt()
     
-    # Call agent
+    # Call agent and get full response (non-streaming)
+    # Must explicitly set stream=False to get RunOutput object with .content
     try:
-        response = agent.run(prompt)
-        full_content = response.content if response else ""
+        response = agent.run(prompt, stream=False)
+        full_content = response.content if response and response.content else ""
         
-        # Emit chunks for streaming effect
-        if stream and full_content:
-            words = full_content.split()
-            chunk_size = 5
-            for i in range(0, len(words), chunk_size):
-                chunk = " ".join(words[i:i+chunk_size])
-                yield DebateEvent(
-                    event_type=DebateEventType.AGENT_MESSAGE_CHUNK,
-                    data={
-                        "agent_id": opposition_id,
-                        "agent_name": agent.name,
-                        "role": "opposition",
-                        "chunk": chunk,
-                    },
-                    timestamp=datetime.now().isoformat()
-                )
-        
-        # Emit completion event
+        # Emit completion event with full response
         yield DebateEvent(
             event_type=DebateEventType.AGENT_MESSAGE_COMPLETE,
             data={
@@ -281,4 +243,3 @@ def check_round_completion(state: Dict[str, Any]) -> str:
         return "vote"
     
     return "continue"
-

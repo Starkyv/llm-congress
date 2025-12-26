@@ -74,7 +74,7 @@ def conclude_debate(
     summary = ""
     try:
         prompt = mod_task.build_prompt()
-        response = moderator.run(prompt)
+        response = moderator.run(prompt, stream=False)
         summary = response.content if response else ""
         
         # Emit chunks for streaming effect

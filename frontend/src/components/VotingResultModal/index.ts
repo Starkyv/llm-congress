@@ -1,0 +1,2 @@
+export { VotingResultModal } from "./VotingResultModal";
+

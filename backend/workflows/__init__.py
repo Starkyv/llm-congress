@@ -33,7 +33,6 @@ from .config import (
 from .debate_workflow import (
     DebateWorkflow,
     create_debate_workflow,
-    create_agno_workflow,
 )
 
 from .steps import (
@@ -49,7 +48,6 @@ __all__ = [
     # Main workflow
     'DebateWorkflow',
     'create_debate_workflow',
-    'create_agno_workflow',
     # Config
     'DebateWorkflowConfig',
     'DebateEvent',

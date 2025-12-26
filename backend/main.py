@@ -52,7 +52,7 @@ class DebateRequest(BaseModel):
     """Request to start a new debate"""
     topic: str = Field(..., description="The debate topic")
     duration: int = Field(default=300, description="Duration in seconds")
-    exchanges_per_round: int = Field(default=3, description="Exchanges before voting")
+    exchanges_per_round: int = Field(default=5, description="Exchanges before voting")
     first_agent_id: Optional[str] = Field(default=None, description="First agent ID")
 
 

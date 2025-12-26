@@ -71,7 +71,7 @@ class DebateArgumentTask(BaseModel):
         
         prompt_parts.append(
             "\nGUIDELINES:\n"
-            "- Keep your response to 100-150 words\n"
+            "- Keep your response to just once sentence\n"
             "- Be specific and impactful\n"
             "- Stay in character with your personality\n"
             "- Make every word count"
@@ -85,7 +85,7 @@ class DebateArgumentTask(BaseModel):
             f"You are participating in a formal debate on: {self.topic}",
             f"Your stance is {'FOR' if self.stance == 'for' else 'AGAINST'} the proposition.",
             f"Argue using your {self.personality_note} style.",
-            "Keep responses between 100-150 words.",
+            "Keep responses to just once sentence.",
             "Be persuasive, specific, and impactful.",
         ]
 
